@@ -14,6 +14,11 @@ import java.lang.reflect.ParameterizedType
 import java.util.*
 import kotlin.collections.ArrayList
 
+/**
+ *
+ * @since 2.0.0
+ * @author ruskonert
+ */
 abstract class FentryCollector<Entity : Fentry<Entity>>
 {
     @Suppress("UNCHECKED_CAST")
@@ -21,39 +26,66 @@ abstract class FentryCollector<Entity : Fentry<Entity>>
     private val persistentBaseClass : Class<Entity> = (javaClass.genericSuperclass as? ParameterizedType)!!.actualTypeArguments[0] as Class<Entity>
     fun getPersistentBaseClass() : Class<Entity> = this.persistentBaseClass
 
+    /**
+     *
+     */
     private val uid : String
     fun getUniqueId() : String = this.uid
 
+    /**
+     *
+     */
     private var entityCollection : MutableList<Entity>
-    constructor() : this(UUID.randomUUID().toString().replace("-", ""))
-    protected constructor(uuid : String) : super()
-    {
+    constructor() : this(UUID.randomUUID().toString())
+    protected constructor(uuid : String) : super() {
         this.uid = uuid
         this.entityCollection = ArrayList()
     }
 
-    fun generate(handler : CollectionHandler) : FentryCollector<Entity>
-    {
-        val target = this
-        handlerCollections.put(handler, target)
-        target.handler = handler
-        return target
+    /**
+     *
+     */
+    fun registerTask(handler : CollectionHandler) : FentryCollector<Entity> {
+        handlerCollections.put(handler, this)
+        this.handler = handler
+        return this
     }
 
+    /**
+     *
+     */
     private lateinit var handler : CollectionHandler
     fun getHandler() : CollectionHandler = this.handler
 
     /**
      * Retrieves all entities that have the class type of the Collection.
      * The entities are those in which disk I/O synchronization is continuously performed by the create function.
-     *
      * @return The entities with continuous disk I/O synchronization
      * @see work.ruskonert.fentry.Fentry.create
      */
     fun getEntities() : MutableList<Entity> = this.entityCollection
-    private val identifier : MutableList<String> = ArrayList()
-    fun addIdentity(vararg signature : String) = this.identifier.addAll(signature)
-    fun getIdentifier() : MutableList<String> = this.identifier
+
+    /**
+     * A collection of field names for identifying entities.
+     * It will be use 'uid' to identify the Entity only if it is empty.
+     */
+    private val identifier : MutableList<String> = arrayOf("uid").toMutableList()
+
+    /**
+     * Add a field name to identify the Entity you want to import.
+     * The getEntity method can identify and retrieve an Entity through a stored signature.
+     * @param signature The field names defined or inferred within the class
+     * @see work.ruskonert.fentry.FentryCollector.getEntity
+     */
+    fun addIdentity(vararg signature : String) {
+        for(sig in signature) {
+            if(! this.identifier.contains(sig)) {
+                this.identifier.add(sig)
+            }
+        }
+    }
+
+    fun getIdentifier() : List<String> = this.identifier
 
     open fun getEntity(objectData: Any?) : Entity?
     {
@@ -141,12 +173,9 @@ abstract class FentryCollector<Entity : Fentry<Entity>>
                 if(registerEntities.isEmpty()) return null
 
                 val checkFunction0 = fun(value : String, target : Fentry<*>) : E? {
-                    if(isUUID(value) && target.getUniqueId() == objectData) return target as E?
-                    else {
-                        for (field in target.getSerializableEntityFields(specific = collection.getIdentifier())) {
-                            if(field.type != String::class.java) continue
-                            if((field.get(target) as String) == value) return target as E?
-                        }
+                    for (field in target.getSerializableEntityFields(specific = collection.getIdentifier())) {
+                        if(field.type != String::class.java) continue
+                        if((field.get(target) as String) == value) return target as E?
                     }
                     return null
                 }
@@ -256,7 +285,7 @@ abstract class FentryCollector<Entity : Fentry<Entity>>
         }
 
         @Suppress("UNCHECKED_CAST")
-        suspend fun <E : Fentry<E>> setReference(entity: Fentry<E>)
+        suspend fun <E : Fentry<E>> setReference(entity: Fentry<E>, containable : Boolean = false)
         {
             for(k in getEntityCollections().values()) {
                 if(entity::class.java.isAssignableFrom(k.getPersistentBaseClass()))
@@ -279,7 +308,7 @@ abstract class FentryCollector<Entity : Fentry<Entity>>
                     return
                 }
             }
-            println("Not exist EntityUnitCollection<${entity::class.java.simpleName}>, It needs to specific entity collection from register class.")
+            println("Not exist EntityUnitCollection<${entity::class.java.simpleName}>, It needs to specific entity collection from registerTask class.")
         }
 
         fun handlerFrom(handler: CollectionHandler): List<FentryCollector<*>>? {

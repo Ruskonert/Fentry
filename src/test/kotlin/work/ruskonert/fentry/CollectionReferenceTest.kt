@@ -2,9 +2,6 @@ package work.ruskonert.fentry
 
 import org.junit.Before
 import org.junit.Test
-import work.ruskonert.fentry.CollectionHandler
-import work.ruskonert.fentry.Fentry
-import work.ruskonert.fentry.FentryCollector
 
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -46,12 +43,12 @@ class CollectionTest {
     @Before
     fun construct() {
         // Construct a collection & Configure the basis value
-        testCollection = TestCollection().generate(handler)
+        testCollection = TestCollection().registerTask(handler)
 
         // For specify the entity with field name, which is "specificName".
         testCollection.addIdentity("specificName")
 
-        // Construct the entity and generate its object & refer to collection which was created
+        // Construct the entity and registerTask its object & refer to collection which was created
         entity = TestEntity().create()
 
         // Disable the ability of identity the field which specifies the annotation Transient.

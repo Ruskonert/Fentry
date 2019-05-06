@@ -1,6 +1,8 @@
 package work.ruskonert.fentry
 
 import com.google.gson.*
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.lang.reflect.Field
 import java.lang.reflect.Modifier
@@ -10,88 +12,163 @@ import java.util.*
 import kotlin.reflect.KClass
 import kotlin.reflect.full.primaryConstructor
 
-open class Fentry<Entity : Fentry<Entity>> : SerializeAdapter<Entity>()
-{
-    private val serializeAdapter : SerializeAdapter<Entity> = Fentry()
-
-    @Suppress("UNCHECKED_CAST")
-    fun create(toDatabase : Boolean = true) : Entity {
-        val obj = this
-        runBlocking {
-            FentryCollector.setReference(obj)
-        }
-        return this as Entity
-    }
-
-    @Suppress("UNCHECKED_CAST")
-    fun createWithNotUnique() : Entity {
-        val obj = this
-        runBlocking {
-            FentryCollector.setReference(obj)
-        }
-        val field = obj::class.java.getDeclaredField("uid")
-        this.changeAnnotationValue(field.getAnnotation(InternalType::class.java), "isExpected", false)
-        return this as Entity
-    }
-
+object Util0 {
     /**
      * Changes the annotation value for the given key of the given annotation to newValue and returns
      * the previous value.
      */
     @Suppress("UNCHECKED_CAST")
-    private fun changeAnnotationValue(annotation: Annotation, key: String, newValue: Any): Any {
+    fun changeAnnotationValue(annotation: Annotation, key: String, newValue: Any): Any {
         val handler = getInvocationHandler(annotation)
         val f: Field
         try {
             f = handler.javaClass.getDeclaredField("memberValues")
+            f.isAccessible = true
+            val memberValues: MutableMap<String, Any> = f.get(handler) as MutableMap<String, Any>
+            val oldValue = memberValues[key]
+            if (oldValue == null || oldValue.javaClass != newValue.javaClass) {
+                throw IllegalArgumentException()
+            }
+            memberValues[key] = newValue
+            return oldValue
         }
-        catch (e: NoSuchFieldException) {
-            throw IllegalStateException(e)
-        }
-        catch (e: SecurityException) {
-            throw IllegalStateException(e)
-        }
-
-        f.isAccessible = true
-        val memberValues: MutableMap<String, Any>
-        try {
-            memberValues = f.get(handler) as MutableMap<String, Any>
-        } catch (e: IllegalArgumentException) {
+        catch (e: IllegalArgumentException) {
             throw IllegalStateException(e)
         } catch (e: IllegalAccessException) {
             throw IllegalStateException(e)
         }
+    }
+}
 
-        val oldValue = memberValues[key]
-        if (oldValue == null || oldValue.javaClass != newValue.javaClass) {
-            throw IllegalArgumentException()
-        }
-        memberValues[key] = newValue
-        return oldValue
+/**
+ *
+ */
+open class Fentry<Entity : Fentry<Entity>> : SerializeAdapter<Entity>()
+{
+    override fun serialize(p0: Entity, p1: Type?, p2: JsonSerializationContext?): JsonElement {
+        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
     }
 
+    /**
+     *
+     */
+    @Suppress("UNCHECKED_CAST")
+    fun register(containable : Boolean = true) : Entity {
+        val obj = this
+        GlobalScope.launch {
+            FentryCollector.setReference(obj, containable)
+        }
+        return this as Entity
+    }
+
+    /**
+     *
+     */
+    @Suppress("UNCHECKED_CAST")
+    fun registerNonUnique() : Entity {
+        val obj = this
+        runBlocking {
+            FentryCollector.setReference(obj)
+            val field = obj::class.java.getDeclaredField("uid")
+            Util0.changeAnnotationValue(field.getAnnotation(InternalType::class.java), "isExpected", false)
+        }
+        return this as Entity
+    }
+
+    /**
+     *
+     */
     @InternalType(IsExpected = true)
-    private var uid : String = ""
+    private var uid : String = "Please call the method 'register' if you want to identity it."
     fun getUniqueId() : String = this.uid
 
-
+    /**
+     *
+     */
     @InternalType
     private var collection : FentryCollector<Entity>? = null
     fun getEntityCollector() : FentryCollector<Entity>? = this.collection
-    fun convertNonDependent() {
-        this.collection = null
-    }
+    fun convertNonDependent() { this.collection = null }
 
+    /**
+     *
+     */
     fun getEntity(referenceObject: Any?) : Entity? {
         val ref = this.collection ?: return null
         return ref.getEntity(referenceObject)
     }
 
+    /**
+     *
+     */
     @InternalType
     private val serializeAdapters : MutableList<SerializeAdapter<*>> = ArrayList()
-    fun serialize() : String {
-        return GsonBuilder().serializeNulls().setPrettyPrinting().create().toJson(this.getSerializeElements())
+
+    /**
+     *
+     */
+    fun getSerializeString(isPretty : Boolean = true) : String {
+        val element = this.getSerializeElements()
+        val gsonBuilder = GsonBuilder().serializeNulls()
+        if(isPretty) gsonBuilder.setPrettyPrinting()
+        return gsonBuilder.create().toJson(element)
     }
+
+    /**
+     *
+     */
+    fun getSerializeElements() : JsonElement {
+        val jsonObject = JsonObject()
+        for(field in this.getSerializableEntityFields())
+            this.addFieldProperty(jsonObject, field, this)
+        return jsonObject
+    }
+
+    /**
+     *
+     */
+    fun getSerializableEntityFields(target : Class<*> = this::class.java, specific : List<String>? = null) : Iterable<Field> {
+        val fieldList = this.getFindableFieldList(target, this.ignoreTransient)
+        return if(specific == null) fieldList
+        else fieldList.filter { field: Field -> specific.contains(field.name)  }
+    }
+
+    /**
+     *
+     */
+    private fun getFindableFieldList(base : Class<*>, ignoreTransient: Boolean) : Iterable<Field> {
+        val fList = ArrayList<Field>()
+        var kClass : Class<*> = base
+        while(true) {
+            // Transient annotations are commonly used to exclude from serialization.
+            // However, Fentry queries this because it serializes all of these fields.
+            if(ignoreTransient) {
+                for (f in kClass.declaredFields)
+                    // The field that was annotated it is no need to serialize because they just use for internal.
+                    // The named 'Companion' is default object class of Kotlin, which collected the static fields & methods.
+                    // Therefore no need to serialize this field.
+                    if (!(f.type.name.endsWith("\$Companion") || this.isInternalField(f))) fList.add(f)
+            }
+            else {
+                try {
+                    for(f in kClass.declaredFields) {
+                        f.isAccessible = true
+                        if(f.type.name.endsWith("\$Companion")) continue
+                        if(! Modifier.isTransient(f.modifiers) && !this.isInternalField(f)) fList.add(f)
+                    }
+                }
+                catch(e : NoSuchFieldException) {
+                    e.printStackTrace()
+                }
+            }
+            if(kClass == Fentry::class.java) break
+            kClass = kClass.superclass
+        }
+        return fList
+    }
+
+
+
 
     fun registerSerializeAdapter(vararg adapters : KClass<out SerializeAdapter<*>>)
     {
@@ -116,54 +193,9 @@ open class Fentry<Entity : Fentry<Entity>> : SerializeAdapter<Entity>()
         }
     }
 
-    fun getSerializeElements() : JsonElement {
-        return this.serialize0(this::class.java, this)
-    }
-
-    private fun serialize0(fs : Class<*>, target : Any = this) : JsonElement {
-        val jsonObject = JsonObject()
-        for(field in this.getSerializableEntityFields(fs)) {
-            this.addFieldProperty(jsonObject, field, target)
-        }
-        return jsonObject
-    }
-
-    fun getSerializableEntityFields(target : Class<*> = this::class.java, specific : List<String>? = null) : Iterable<Field> {
-        val fieldList = this.getFields0(target, this.ignoreTransient)
-        return if(specific == null) fieldList
-        else fieldList.filter { field: Field -> specific.contains(field.name)  }
-    }
-
     @InternalType
     private var ignoreTransient : Boolean = false
     fun disableTransient(status : Boolean) { this.ignoreTransient = status }
-
-    private fun getFields0(base : Class<*>, ignoreTransient: Boolean) : Iterable<Field> {
-        val fList = ArrayList<Field>()
-        var kClass : Class<*> = base
-        while(true) {
-            if(ignoreTransient)
-                for(f in kClass.declaredFields) {
-                    if(f.type.name.endsWith("\$Companion") || this.isInternalField(f)) continue
-                    else { if(! isInternalField(f)) fList.add(f) }
-                }
-            else {
-                try {
-                    for(f in kClass.declaredFields) {
-                        f.isAccessible = true
-                        if(f.type.name.endsWith("\$Companion")) continue
-                        if(! Modifier.isTransient(f.modifiers) && ! this.isInternalField(f)) fList.add(f)
-                    }
-                }
-                catch(e : NoSuchFieldException) {
-                    e.printStackTrace()
-                }
-            }
-            if(kClass == Fentry::class.java) break
-            kClass = kClass.superclass
-        }
-        return fList
-    }
 
     private fun addFieldProperty(jsonObject : JsonObject, field : Field, target : Any) {
         field.isAccessible = true
@@ -230,12 +262,14 @@ open class Fentry<Entity : Fentry<Entity>> : SerializeAdapter<Entity>()
         return FentryCollector.deserializeFromClass(p0!!, this.getReference())
     }
 
-    override fun serialize(p0: Entity?, p1: Type?, p2: JsonSerializationContext?): JsonElement {
+    fun getSerializeString(p0: Entity?, p1: Type?, p2: JsonSerializationContext?): JsonElement {
         if(p0 == null) return JsonNull.INSTANCE
         return p0.getSerializeElements()
     }
 
     companion object {
+        private val DEFAULT_SERIALIZE_ADAPTER = DefaultSerializer()
+
         fun registerDefaultAdapter(gsonBuilder : GsonBuilder) : GsonBuilder {
             for(adapter in getDefaultAdapter()) {
                 val jcs = adapter.constructors[0].newInstance() as SerializeAdapter<*>
@@ -249,7 +283,7 @@ open class Fentry<Entity : Fentry<Entity>> : SerializeAdapter<Entity>()
                 val jcs = adapter.constructors[0].newInstance() as SerializeAdapter<*>
                 gsonBuilder.registerTypeAdapter(jcs.getReference(), jcs)
             }
-            gsonBuilder.registerTypeAdapter(ref.getReference(), ref.serializeAdapter)
+            gsonBuilder.registerTypeAdapter(ref.getReference(), DEFAULT_SERIALIZE_ADAPTER)
             return gsonBuilder
         }
 
@@ -268,6 +302,7 @@ open class Fentry<Entity : Fentry<Entity>> : SerializeAdapter<Entity>()
                 val adapterType = adapter.getReference()
                 gsonBuilder.registerTypeAdapter(adapterType, adapter)
             }
+
             val gson = gsonBuilder.serializeNulls().create()
             when(value) {
                 is Number  -> jsonObject.addProperty(key, value)
@@ -275,20 +310,24 @@ open class Fentry<Entity : Fentry<Entity>> : SerializeAdapter<Entity>()
                 is String  -> jsonObject.addProperty(key, value)
                 is Boolean -> jsonObject.addProperty(key, value)
                 else -> {
-                    if(value is Fentry<*>)
-                    {
-                        value.disableTransient(disableTransient)
-                        jsonObject.add(key, value.getSerializeElements())
-                        return
-                    }
-                    else {
-                        try {
+                    when (value) {
+                        is Fentry<*> -> {
+                            value.disableTransient(disableTransient)
+                            jsonObject.add(key, value.getSerializeElements())
+                            return
+                        }
+                        is Collection<*> -> {
+                            for((indexOf, v) in value.withIndex()) {
+                                jsonObject.add(indexOf.toString(), JsonParser().parse(gson.toJson(v)))
+                            }
+                        }
+
+                        else -> try {
                             val result = gson.toJson(value)
                             val parser = JsonParser()
                             val element = parser.parse(result)
                             jsonObject.add(key, element)
-                        }
-                        catch(e : Exception) {
+                        } catch(e : Exception) {
                             e.printStackTrace()
                             jsonObject.addProperty(key, "FAILED_SERIALIZED_OBJECT")
                         }

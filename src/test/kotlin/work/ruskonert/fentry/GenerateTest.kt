@@ -42,7 +42,7 @@ class GenerateTest
         val element2 = FentryCollector.deserializeFromClass(human.getSerializeElements(), GenerationTestEntity::class.java)
         assertNotNull(element)
         assertNotNull(element2)
-        assertEquals(human.serialize(), element.serialize())
-        assertEquals(human.serialize(), element2.serialize())
+        assertEquals(human.getSerializeString(), element.getSerializeString())
+        assertEquals(human.getSerializeString(), element2.getSerializeString())
     }
 }
