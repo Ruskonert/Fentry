@@ -49,7 +49,7 @@ class CollectionTest {
         testCollection.addIdentity("specificName")
 
         // Construct the entity and registerTask its object & refer to collection which was created
-        entity = TestEntity().create()
+        entity = TestEntity().register()
 
         // Disable the ability of identity the field which specifies the annotation Transient.
         entity.disableTransient(true)

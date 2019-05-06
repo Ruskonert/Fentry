@@ -305,7 +305,6 @@ abstract class FentryCollector<Entity : Fentry<Entity>>
                         targetRef.add(entity as E)
                     }
                     job.join()
-                    return
                 }
             }
             println("Not exist EntityUnitCollection<${entity::class.java.simpleName}>, It needs to specific entity collection from registerTask class.")

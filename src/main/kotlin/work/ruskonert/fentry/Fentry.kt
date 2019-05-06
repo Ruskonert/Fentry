@@ -6,6 +6,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.lang.reflect.Field
 import java.lang.reflect.Modifier
+import java.lang.reflect.ParameterizedType
 import java.lang.reflect.Proxy.getInvocationHandler
 import java.lang.reflect.Type
 import java.util.*
@@ -13,6 +14,14 @@ import kotlin.reflect.KClass
 import kotlin.reflect.full.primaryConstructor
 
 object Util0 {
+    fun isInternalField(f: Field): Boolean {
+        if(f.isAnnotationPresent(InternalType::class.java)) {
+            val anno = f.getAnnotation(InternalType::class.java)
+            return !anno.IsExpected
+        }
+        return false
+    }
+
     /**
      * Changes the annotation value for the given key of the given annotation to newValue and returns
      * the previous value.
@@ -38,15 +47,78 @@ object Util0 {
             throw IllegalStateException(e)
         }
     }
+
+    fun configureFentryGson(adapterColl : Collection<SerializeAdapter<*>>?, fentryTypeOf : Class<out Fentry<*>>?) : Gson {
+        val gsonBuilder = GsonBuilder()
+        var adapters = adapterColl
+        if(adapters == null)
+            adapters = ArrayList()
+
+        for(adapter in adapters) {
+            // If the DefaultSerializer is in the adapter, register the class type of
+            // 'fentryTypeOf' so that it can be serialized. DefaultSerializer is available
+            // for all classes for Fentry Type.
+            val adapterType : Class<*> = if(adapter is DefaultSerializer) {
+                fentryTypeOf ?: adapter.getReference()
+            } else
+                adapter.getReference()
+            gsonBuilder.registerTypeAdapter(adapterType, adapter)
+        }
+        return gsonBuilder.serializeNulls().create()
+    }
+
+    /**
+     *
+     */
+     fun setProperty(jsonObject : JsonObject, key : String, value : Any?, adapterColl : Collection<SerializeAdapter<*>>? = null,
+                            disableTransient : Boolean = false, fentryTypeOf : Class<out Fentry<*>>? = null) : JsonObject {
+        val gson = configureFentryGson(adapterColl, fentryTypeOf)
+        when(value) {
+            // Those types can use the default method.
+            // There's no need specific process working.
+            is Number  -> jsonObject.addProperty(key, value)
+            is Char    -> jsonObject.addProperty(key, value)
+            is String  -> jsonObject.addProperty(key, value)
+            is Boolean -> jsonObject.addProperty(key, value)
+
+            // It needs to other method.
+            // Most of type could be Fentry type or Collection, and Iterable.
+            // Otherwise, It can't serialize.
+            else -> {
+                when(value) {
+                    is Fentry<*> -> {
+                        // It depends the owner value.
+                        value.disableTransient(disableTransient)
+                        jsonObject.add(key, value.getSerializeElements())
+                    }
+                    else -> try {
+                        val result = gson.toJson(value)
+                        val parser = JsonParser()
+                        val element = parser.parse(result)
+                        jsonObject.add(key, element)
+                    } catch(e : Exception) {
+                        e.printStackTrace()
+                        jsonObject.addProperty(key, "FAILED_SERIALIZED_OBJECT")
+                    }
+                }
+            }
+        }
+        return jsonObject
+    }
 }
 
 /**
  *
+ * @since 2.0.0
+ * @author ruskonert
  */
-open class Fentry<Entity : Fentry<Entity>> : SerializeAdapter<Entity>()
+open class Fentry<Entity : Fentry<Entity>>
 {
-    override fun serialize(p0: Entity, p1: Type?, p2: JsonSerializationContext?): JsonElement {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+    @InternalType
+    private var reference : Type = (javaClass.genericSuperclass as ParameterizedType).actualTypeArguments[0]
+    @Suppress("UNCHECKED_CAST")
+    fun getReference() : Class<Entity> {
+        return this.reference as Class<Entity>
     }
 
     /**
@@ -102,7 +174,7 @@ open class Fentry<Entity : Fentry<Entity>> : SerializeAdapter<Entity>()
      *
      */
     @InternalType
-    private val serializeAdapters : MutableList<SerializeAdapter<*>> = ArrayList()
+    private val serializeAdapters : MutableList<SerializeAdapter<*>> = arrayOf(DefaultSerializer.INSTANCE).toMutableList()
 
     /**
      *
@@ -119,9 +191,28 @@ open class Fentry<Entity : Fentry<Entity>> : SerializeAdapter<Entity>()
      */
     fun getSerializeElements() : JsonElement {
         val jsonObject = JsonObject()
-        for(field in this.getSerializableEntityFields())
-            this.addFieldProperty(jsonObject, field, this)
+        for(field in this.getSerializableEntityFields()) {
+            this.addPropertyOfField(jsonObject, field, this)
+        }
         return jsonObject
+    }
+
+    /**
+     *
+     */
+    private fun addPropertyOfField(jsonObject : JsonObject, field : Field, target : Any) {
+        field.isAccessible = true
+        val fieldName : String = field.name
+        val value: Any? = try {
+            field.get(target)
+        }
+        catch(_ : IllegalArgumentException){ null }
+        catch(_ : IllegalAccessException)  { null }
+        if(value == null) {
+            jsonObject.add(fieldName, JsonNull.INSTANCE)
+            return
+        }
+        Util0.setProperty(jsonObject, fieldName, value, this.serializeAdapters, this.ignoreTransient, this::class.java)
     }
 
     /**
@@ -141,40 +232,46 @@ open class Fentry<Entity : Fentry<Entity>> : SerializeAdapter<Entity>()
         var kClass : Class<*> = base
         while(true) {
             // Transient annotations are commonly used to exclude from serialization.
-            // However, Fentry queries this because it serializes all of these fields.
+            // However, Fentry queries that because it serializes all of these fields.
             if(ignoreTransient) {
                 for (f in kClass.declaredFields)
                     // The field that was annotated it is no need to serialize because they just use for internal.
                     // The named 'Companion' is default object class of Kotlin, which collected the static fields & methods.
                     // Therefore no need to serialize this field.
-                    if (!(f.type.name.endsWith("\$Companion") || this.isInternalField(f))) fList.add(f)
+                    if (!(f.type.name.endsWith("\$Companion") || Util0.isInternalField(f))) fList.add(f)
             }
             else {
                 try {
                     for(f in kClass.declaredFields) {
                         f.isAccessible = true
                         if(f.type.name.endsWith("\$Companion")) continue
-                        if(! Modifier.isTransient(f.modifiers) && !this.isInternalField(f)) fList.add(f)
+                        // It can't be ignored the transient annotation, Because 'ignoreTransient' is false.
+                        if(!Modifier.isTransient(f.modifiers) && !Util0.isInternalField(f)) fList.add(f)
                     }
                 }
                 catch(e : NoSuchFieldException) {
                     e.printStackTrace()
                 }
             }
+            // If the routine reaches the end of the entity(itself type), That same the search is ended.
             if(kClass == Fentry::class.java) break
+
+            // It means there's remains need to search, maybe the class is superclass type.
             kClass = kClass.superclass
         }
         return fList
     }
 
-
-
+    fun registerSerializeAdapter(vararg adapter : SerializeAdapter<*>) {
+        this.serializeAdapters.addAll(adapter)
+    }
 
     fun registerSerializeAdapter(vararg adapters : KClass<out SerializeAdapter<*>>)
     {
         for(kClazz in adapters) {
             val adapterConstructor = kClazz.primaryConstructor
             if(adapterConstructor != null) {
+                // The constructor of adapter must be have the empty parameter.
                 if(adapterConstructor.parameters.isEmpty()) {
                     this.serializeAdapters.add(adapterConstructor.call())
                 }
@@ -186,6 +283,7 @@ open class Fentry<Entity : Fentry<Entity>> : SerializeAdapter<Entity>()
         for(kClazz in adapters) {
             val adapterConstructor = kClazz.constructors[0]
             if(adapterConstructor != null) {
+                // The constructor of adapter must be have the empty parameter.
                 if(adapterConstructor.parameters.isEmpty()) {
                     this.serializeAdapters.add(adapterConstructor.newInstance() as SerializeAdapter<*>)
                 }
@@ -193,44 +291,29 @@ open class Fentry<Entity : Fentry<Entity>> : SerializeAdapter<Entity>()
         }
     }
 
-    @InternalType
-    private var ignoreTransient : Boolean = false
-    fun disableTransient(status : Boolean) { this.ignoreTransient = status }
-
-    private fun addFieldProperty(jsonObject : JsonObject, field : Field, target : Any) {
-        field.isAccessible = true
-        val fieldName : String = field.name
-        val value: Any? = try {
-            field.get(target)
-        }
-        catch(_ : IllegalArgumentException){ null }
-        catch(_ : IllegalAccessException)  { null }
-        if(value == null) {
-            jsonObject.add(fieldName, null); return
-        }
-        setProperty(jsonObject, fieldName, value, this.serializeAdapters, this.ignoreTransient, referenceOf = this)
-    }
-
-    private fun isInternalField(f: Field): Boolean {
-        if(f.isAnnotationPresent(InternalType::class.java)) {
-            val anno = f.getAnnotation(InternalType::class.java)
-            return !anno.IsExpected
+    override fun equals(other: Any?): Boolean {
+        if(other is Fentry<*>) {
+            return (this.uid == other.uid) && (this.reference == other.reference) && (this.collection == other.collection)
         }
         return false
     }
 
-    fun applyToBase(serialize : String) {
+    @InternalType
+    private var ignoreTransient : Boolean = false
+    fun disableTransient(status : Boolean) { this.ignoreTransient = status }
+
+    fun applyFromBaseElement(serialize : String) {
         val fields = JsonParser().parse(serialize)
-        return this.applyToBase(fields)
+        return this.applyFromBaseElement(fields)
     }
 
-    fun applyToBase(fields : JsonElement) {
+    fun applyFromBaseElement(fields : JsonElement) {
         val instance = FentryCollector.deserializeFromClass(fields, this::class.java) ?: throw RuntimeException("Cannot create new instance from" +
                 " deserializeFromClass Class<${this::class.java.name}> function")
-        return this.applyToBase(instance)
+        return this.applyFromBaseElement(instance)
     }
 
-    fun applyToBase(victim : Fentry<Entity>) {
+    fun applyFromBaseElement(victim : Fentry<Entity>) {
         if(victim::class.java == this::class.java) {
             for (k in victim.getSerializableEntityFields()) this.applyField(k, victim)
         }
@@ -258,18 +341,7 @@ open class Fentry<Entity : Fentry<Entity>> : SerializeAdapter<Entity>()
         throw NotImplementedError("Not Implemented")
     }
 
-    override fun deserialize(p0: JsonElement?, p1: Type?, p2: JsonDeserializationContext?): Entity? {
-        return FentryCollector.deserializeFromClass(p0!!, this.getReference())
-    }
-
-    fun getSerializeString(p0: Entity?, p1: Type?, p2: JsonSerializationContext?): JsonElement {
-        if(p0 == null) return JsonNull.INSTANCE
-        return p0.getSerializeElements()
-    }
-
     companion object {
-        private val DEFAULT_SERIALIZE_ADAPTER = DefaultSerializer()
-
         fun registerDefaultAdapter(gsonBuilder : GsonBuilder) : GsonBuilder {
             for(adapter in getDefaultAdapter()) {
                 val jcs = adapter.constructors[0].newInstance() as SerializeAdapter<*>
@@ -283,57 +355,11 @@ open class Fentry<Entity : Fentry<Entity>> : SerializeAdapter<Entity>()
                 val jcs = adapter.constructors[0].newInstance() as SerializeAdapter<*>
                 gsonBuilder.registerTypeAdapter(jcs.getReference(), jcs)
             }
-            gsonBuilder.registerTypeAdapter(ref.getReference(), DEFAULT_SERIALIZE_ADAPTER)
             return gsonBuilder
         }
 
         fun getDefaultAdapter() : Array<Class<out SerializeAdapter<*>>> {
             return arrayOf()
-        }
-
-        private fun setProperty(jsonObject : JsonObject, key : String, value : Any?, adapterColl : Collection<SerializeAdapter<*>>? = null,
-                                disableTransient : Boolean = false, referenceOf : Fentry<*>) {
-            val gsonBuilder = registerDefaultAdapter(GsonBuilder(), referenceOf)
-            var adapters = adapterColl
-            if(adapters == null)
-                adapters = ArrayList()
-
-            for(adapter in adapters) {
-                val adapterType = adapter.getReference()
-                gsonBuilder.registerTypeAdapter(adapterType, adapter)
-            }
-
-            val gson = gsonBuilder.serializeNulls().create()
-            when(value) {
-                is Number  -> jsonObject.addProperty(key, value)
-                is Char    -> jsonObject.addProperty(key, value)
-                is String  -> jsonObject.addProperty(key, value)
-                is Boolean -> jsonObject.addProperty(key, value)
-                else -> {
-                    when (value) {
-                        is Fentry<*> -> {
-                            value.disableTransient(disableTransient)
-                            jsonObject.add(key, value.getSerializeElements())
-                            return
-                        }
-                        is Collection<*> -> {
-                            for((indexOf, v) in value.withIndex()) {
-                                jsonObject.add(indexOf.toString(), JsonParser().parse(gson.toJson(v)))
-                            }
-                        }
-
-                        else -> try {
-                            val result = gson.toJson(value)
-                            val parser = JsonParser()
-                            val element = parser.parse(result)
-                            jsonObject.add(key, element)
-                        } catch(e : Exception) {
-                            e.printStackTrace()
-                            jsonObject.addProperty(key, "FAILED_SERIALIZED_OBJECT")
-                        }
-                    }
-                }
-            }
         }
     }
 }
