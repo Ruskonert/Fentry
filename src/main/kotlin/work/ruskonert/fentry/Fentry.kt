@@ -1,8 +1,28 @@
+/*
+          Fentry: The Flexible-Serialization Entry
+       Copyright (c) 2019 Ruskonert all rights reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+ */
 package work.ruskonert.fentry
 
 import com.google.gson.*
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.lang.reflect.Field
 import java.lang.reflect.Modifier
@@ -13,7 +33,20 @@ import java.util.*
 import kotlin.reflect.KClass
 import kotlin.reflect.full.primaryConstructor
 
+/*
+ * The object does not depend on the Fentry method, but it acts as a utility
+ * to get the necessary values. You can use these objects to get values that
+ * satisfy certain conditions, which can only be used in the Fentry class.
+ */
 object Util0 {
+    /**
+     * Determines the Field is not serializable value.
+     * This is considered Internal Type when the annotation is referenced or it
+     * is an unpredictable value (isExpected is False).
+     *
+     * @param f The field that you want to check that is internal value
+     * @return returns true if the field is internal value, otherwise false
+     */
     fun isInternalField(f: Field): Boolean {
         if(f.isAnnotationPresent(InternalType::class.java)) {
             val anno = f.getAnnotation(InternalType::class.java)
@@ -25,6 +58,11 @@ object Util0 {
     /**
      * Changes the annotation value for the given key of the given annotation to newValue and returns
      * the previous value.
+     *
+     * @param annotation the target of annotation
+     * @param key the field of the target that is annotation
+     * @param newValue the value that will be applied to selected key
+     * @return The old value fo annotation's key
      */
     @Suppress("UNCHECKED_CAST")
     fun changeAnnotationValue(annotation: Annotation, key: String, newValue: Any): Any {
@@ -48,7 +86,10 @@ object Util0 {
         }
     }
 
-    fun configureFentryGson(adapterColl : Collection<SerializeAdapter<*>>?, fentryTypeOf : Class<out Fentry<*>>?) : Gson {
+    /**
+     *
+     */
+    fun configureFentryGson(adapterColl : Collection<SerializeAdapter<*>>?, fentryTypeOf : Class<out Fentry<*>>?, isPretty : Boolean = false) : Gson {
         val gsonBuilder = GsonBuilder()
         var adapters = adapterColl
         if(adapters == null)
@@ -64,6 +105,7 @@ object Util0 {
                 adapter.getReference()
             gsonBuilder.registerTypeAdapter(adapterType, adapter)
         }
+        if(isPretty) gsonBuilder.setPrettyPrinting()
         return gsonBuilder.serializeNulls().create()
     }
 
@@ -108,7 +150,13 @@ object Util0 {
 }
 
 /**
+ * Fentry is an automatic serializable class that can detect the values that need serialization
+ * for defined fields and class types, and build the adapter. This saves development time by
+ * eliminating the developer writing an adapter and registering it. it is not an abstract class,
+ * but it is not intended to be used by itself; it inherits from child classes and recognizes
+ * the values of child fields.
  *
+ * @param Entity The class type of child class only, which is inherited
  * @since 2.0.0
  * @author ruskonert
  */
@@ -127,7 +175,7 @@ open class Fentry<Entity : Fentry<Entity>>
     @Suppress("UNCHECKED_CAST")
     fun register(containable : Boolean = true) : Entity {
         val obj = this
-        GlobalScope.launch {
+        runBlocking {
             FentryCollector.setReference(obj, containable)
         }
         return this as Entity
@@ -141,8 +189,17 @@ open class Fentry<Entity : Fentry<Entity>>
         val obj = this
         runBlocking {
             FentryCollector.setReference(obj)
-            val field = obj::class.java.getDeclaredField("uid")
-            Util0.changeAnnotationValue(field.getAnnotation(InternalType::class.java), "isExpected", false)
+            var clz : Class<out Fentry<*>>? = obj::class.java.superclass as Class<out Fentry<*>>
+            while(clz != null)  {
+                for(f in clz.declaredFields) {
+                    if(f.name == "uid" && f.declaringClass == Fentry::class.java) {
+                        f.isAccessible = true
+                        Util0.changeAnnotationValue(f.getAnnotation(InternalType::class.java), "isExpected", false)
+                        break
+                    }
+                }
+                clz = clz::class.java.superclass as? Class<out Fentry<*>>
+            }
         }
         return this as Entity
     }
@@ -175,6 +232,7 @@ open class Fentry<Entity : Fentry<Entity>>
      */
     @InternalType
     private val serializeAdapters : MutableList<SerializeAdapter<*>> = arrayOf(DefaultSerializer.INSTANCE).toMutableList()
+    fun getSerializeAdapters() : List<SerializeAdapter<*>> = this.serializeAdapters
 
     /**
      *
