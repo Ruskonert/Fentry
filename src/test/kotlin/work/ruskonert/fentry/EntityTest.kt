@@ -1,6 +1,5 @@
 package work.ruskonert.fentry
 
-import com.google.gson.GsonBuilder
 import org.junit.Before
 import org.junit.Test
 
@@ -21,7 +20,7 @@ class EntityTest
             peopleList.add(p)
         }
 
-        val gson = Util0.configureFentryGson(People().getSerializeAdapters(), People::class.java, true)
+        val gson = Util0.configureFentryGson(People().getSerializeAdapters(), People::class.java, false)
         val string = gson.toJson(peopleList)
         println(string)
     }

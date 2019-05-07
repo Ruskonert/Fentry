@@ -30,6 +30,7 @@ import java.lang.reflect.ParameterizedType
 import java.lang.reflect.Proxy.getInvocationHandler
 import java.lang.reflect.Type
 import java.util.*
+import kotlin.collections.HashMap
 import kotlin.reflect.KClass
 import kotlin.reflect.full.primaryConstructor
 
@@ -71,7 +72,7 @@ object Util0 {
         try {
             f = handler.javaClass.getDeclaredField("memberValues")
             f.isAccessible = true
-            val memberValues: MutableMap<String, Any> = f.get(handler) as MutableMap<String, Any>
+            val memberValues: HashMap<Any, Any> = f.get(handler) as HashMap<Any, Any>
             val oldValue = memberValues[key]
             if (oldValue == null || oldValue.javaClass != newValue.javaClass) {
                 throw IllegalArgumentException()
@@ -199,20 +200,23 @@ open class Fentry<Entity : Fentry<Entity>>
      *
      */
     @Suppress("UNCHECKED_CAST")
-    fun registerNonUnique() : Entity {
+    fun registerNonUnique(isUnreferenced: Boolean = true) : Entity {
         val obj = this
         runBlocking {
-            FentryCollector.setReference(obj)
+            if(!isUnreferenced) FentryCollector.setReference(obj)
             var clz : Class<out Fentry<*>>? = obj::class.java.superclass as Class<out Fentry<*>>
             while(clz != null)  {
                 for(f in clz.declaredFields) {
+                    f.isAccessible = true
                     if(f.name == "uid" && f.declaringClass == Fentry::class.java) {
-                        f.isAccessible = true
-                        Util0.changeAnnotationValue(f.getAnnotation(InternalType::class.java), "isExpected", false)
+                        Util0.changeAnnotationValue(f.getDeclaredAnnotation(InternalType::class.java), "IsExpected", false)
                         break
                     }
                 }
                 clz = clz::class.java.superclass as? Class<out Fentry<*>>
+                if(clz == Any::class.java) {
+                    break
+                }
             }
         }
         return this as Entity
