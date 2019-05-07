@@ -462,7 +462,7 @@ open class Fentry<Entity : Fentry<Entity>>
 
         fun registerDefaultAdapter(gsonBuilder : GsonBuilder, defaultReference : Class<out Fentry<*>>) : GsonBuilder {
             for(adapter in getDefaultAdapter()) {
-                if(adapter is DefaultSerializer || adapter is MapTypeAdapter)
+                if(adapter is DefaultSerializer)
                     gsonBuilder.registerTypeAdapter(defaultReference, adapter)
             }
             return gsonBuilder.serializeNulls()
