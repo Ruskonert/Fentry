@@ -37,6 +37,9 @@ import java.util.*
 import kotlin.collections.ArrayList
 
 /**
+ * FentryCollector is the collection the entity object which was registered by Fentry$register at
+ * generic type, inherited with Fentry Class.
+ * It cans monitor the change of the class value or field, and built in database form.
  *
  * @since 2.0.0
  * @author ruskonert

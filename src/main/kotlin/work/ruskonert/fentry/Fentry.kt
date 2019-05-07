@@ -109,8 +109,7 @@ object Util0 {
             // for all classes for Fentry Type.
             val adapterType : Class<*> = if(adapter is DefaultSerializer) {
                 fentryTypeOf ?: adapter.getReference()
-            } else
-                adapter.getReference()
+            } else adapter.getReference()
             gsonBuilder.registerTypeAdapter(adapterType, adapter)
         }
         if(isPretty) gsonBuilder.setPrettyPrinting()
@@ -118,7 +117,14 @@ object Util0 {
     }
 
     /**
-     *
+     * Sets the property on the JsonObject.
+     * @param jsonObject will be configure the object and apply the value with serialize adapter
+     * @param key
+     * @param value
+     * @param adapterColl
+     * @param disableTransient
+     * @param fentryTypeOf
+     * @return Returns the configured JsonObject, which was applied it
      */
      fun setProperty(jsonObject : JsonObject, key : String, value : Any?, adapterColl : Collection<SerializeAdapter<*>>? = null,
                             disableTransient : Boolean = false, fentryTypeOf : Class<out Fentry<*>>? = null) : JsonObject {
@@ -170,7 +176,7 @@ object Util0 {
  */
 open class Fentry<Entity : Fentry<Entity>>
 {
-    //
+    // The value of class of referenced type at the child.
     @InternalType
     private var reference : Type = (javaClass.genericSuperclass as ParameterizedType).actualTypeArguments[0]
     @Suppress("UNCHECKED_CAST")
@@ -184,8 +190,9 @@ open class Fentry<Entity : Fentry<Entity>>
      * If the task of hooked collection is enabled, the collection can detect it that about
      * changed this entity.
      *
-     * @param containable
-     * @return
+     * @param containable Determines the collection of this entity's base
+     *        can be built to the database form
+     * @return Return this entity that was completed setting the reference to the collection
      */
     @Suppress("UNCHECKED_CAST")
     fun register(containable : Boolean = true) : Entity {
@@ -197,7 +204,12 @@ open class Fentry<Entity : Fentry<Entity>>
     }
 
     /**
+     * Creates the entity without hooking to the collection. It is recommended when
+     * it just uses for singleton-based. it has no unique id, It needs to add the
+     * identifier field name that can be specified.
      *
+     * @see work.ruskonert.fentry.FentryCollector.identifier
+     * @see work.ruskonert.fentry.Fentry.register
      */
     @Suppress("UNCHECKED_CAST")
     fun registerNonUnique(isUnreferenced: Boolean = true) : Entity {
@@ -223,7 +235,9 @@ open class Fentry<Entity : Fentry<Entity>>
     }
 
     /**
-     *
+     * The unique id of this entity.
+     * if the key of annotation is false, it excepts the elements of serialization.
+     * @see work.ruskonert.fentry.InternalType
      */
     @InternalType(IsExpected = true)
     private var uid : String = "Please call the method 'register' if you want to identity it."
