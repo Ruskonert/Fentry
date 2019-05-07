@@ -290,7 +290,6 @@ abstract class FentryCollector<Entity : Fentry<Entity>>
                         if(result != null) {
                             if(Modifier.isFinal(field.modifiers))
                                 field.setInt(null, field.modifiers and Modifier.FINAL.inv())
-                                //modifiersField.setInt(field, field.modifiers and Modifier.FINAL.inv())
                             val resultClazz = result::class.java
                             field.set(targetObject, resultClazz.cast(result))
                         }
@@ -309,7 +308,6 @@ abstract class FentryCollector<Entity : Fentry<Entity>>
                 null
             }
         }
-
         @Suppress("UNCHECKED_CAST")
         suspend fun <E : Fentry<E>> setReference(entity: Fentry<E>, containable : Boolean = false)
         {

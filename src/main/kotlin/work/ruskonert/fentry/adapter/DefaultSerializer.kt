@@ -20,11 +20,13 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
  */
-package work.ruskonert.fentry
+package work.ruskonert.fentry.adapter
 
 import com.google.gson.JsonDeserializationContext
 import com.google.gson.JsonElement
 import com.google.gson.JsonSerializationContext
+import work.ruskonert.fentry.Fentry
+import work.ruskonert.fentry.FentryCollector
 import java.lang.reflect.Type
 
 class DefaultSerializer private constructor() : SerializeAdapter<Fentry<*>>(Fentry::class.java)

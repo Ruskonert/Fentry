@@ -24,6 +24,9 @@ package work.ruskonert.fentry
 
 import com.google.gson.*
 import kotlinx.coroutines.runBlocking
+import work.ruskonert.fentry.adapter.DefaultSerializer
+import work.ruskonert.fentry.adapter.MapTypeAdapter
+import work.ruskonert.fentry.adapter.SerializeAdapter
 import java.lang.reflect.Field
 import java.lang.reflect.Modifier
 import java.lang.reflect.ParameterizedType
@@ -97,20 +100,23 @@ object Util0 {
      * @return Returns gson that was configured the adapters & properties
      * @see work.ruskonert.fentry.DefaultSerializer
      */
-    fun configureFentryGson(adapterColl : Collection<SerializeAdapter<*>>?, fentryTypeOf : Class<out Fentry<*>>?, isPretty : Boolean = false) : Gson {
-        val gsonBuilder = GsonBuilder()
+    fun configureFentryGson(adapterColl : Collection<SerializeAdapter<*>>?, fentryTypeOf : Class<out Fentry<*>>? = null, isPretty : Boolean = false) : Gson {
+        var gsonBuilder = GsonBuilder()
         var adapters = adapterColl
-        if(adapters == null)
-            adapters = ArrayList()
-
-        for(adapter in adapters) {
-            // If the DefaultSerializer is in the adapter, register the class type of
-            // 'fentryTypeOf' so that it can be serialized. DefaultSerializer is available
-            // for all classes for Fentry Type.
-            val adapterType : Class<*> = if(adapter is DefaultSerializer) {
-                fentryTypeOf ?: adapter.getReference()
-            } else adapter.getReference()
-            gsonBuilder.registerTypeAdapter(adapterType, adapter)
+        if(adapters != null) {
+            for (adapter in adapters) {
+                // If the DefaultSerializer is in the adapter, register the class type of
+                // 'fentryTypeOf' so that it can be serialized. DefaultSerializer is available
+                // for all classes for Fentry Type.
+                val adapterType: Class<*> = if (adapter is DefaultSerializer) {
+                    fentryTypeOf ?: adapter.getReference()
+                } else adapter.getReference()
+                gsonBuilder.registerTypeAdapter(adapterType, adapter)
+            }
+        }
+        else {
+            val cz = fentryTypeOf ?: Fentry::class.java
+            gsonBuilder = Fentry.registerDefaultAdapter(gsonBuilder, cz)
         }
         if(isPretty) gsonBuilder.setPrettyPrinting()
         return gsonBuilder.serializeNulls().create()
@@ -127,7 +133,7 @@ object Util0 {
      * @return Returns the configured JsonObject, which was applied it
      */
      fun setProperty(jsonObject : JsonObject, key : String, value : Any?, adapterColl : Collection<SerializeAdapter<*>>? = null,
-                            disableTransient : Boolean = false, fentryTypeOf : Class<out Fentry<*>>? = null) : JsonObject {
+                     disableTransient : Boolean = false, fentryTypeOf : Class<out Fentry<*>>? = null) : JsonObject {
         val gson = configureFentryGson(adapterColl, fentryTypeOf)
         when(value) {
             // Those types can use the default method.
@@ -146,6 +152,9 @@ object Util0 {
                         // It depends the owner value.
                         value.disableTransient(disableTransient)
                         jsonObject.add(key, value.getSerializeElements())
+                    }
+                    is Map<*,*> -> {
+                        jsonObject.add(key, MapTypeAdapter.INSTANCE.serialize(value as Map<Any, Any?>?, fentryTypeOf,null))
                     }
                     else -> try {
                         val result = gson.toJson(value)
@@ -177,12 +186,15 @@ object Util0 {
 open class Fentry<Entity : Fentry<Entity>>
 {
     // The value of class of referenced type at the child.
+
     @InternalType
     private var reference : Type = (javaClass.genericSuperclass as ParameterizedType).actualTypeArguments[0]
     @Suppress("UNCHECKED_CAST")
     fun getReference() : Class<Entity> {
         return this.reference as Class<Entity>
     }
+
+    private val typeOf : String = this.reference.typeName
 
     /**
      * Updates to the entity collection, which sames the type of this entity.
@@ -263,7 +275,7 @@ open class Fentry<Entity : Fentry<Entity>>
      *
      */
     @InternalType
-    private val serializeAdapters : MutableList<SerializeAdapter<*>> = arrayOf(DefaultSerializer.INSTANCE).toMutableList()
+    private val serializeAdapters : MutableList<SerializeAdapter<*>> = this.getDefaultAdapterInit().toMutableList()
     fun getSerializeAdapters() : List<SerializeAdapter<*>> = this.serializeAdapters
 
     /**
@@ -418,7 +430,7 @@ open class Fentry<Entity : Fentry<Entity>>
             catch(e : Exception) { false }
     }
 
-    private fun getDefaultAdapterInit() : Array<Class<out SerializeAdapter<*>>> {
+    private fun getDefaultAdapterInit() : Array<out SerializeAdapter<*>> {
         return try {
             getDefaultAdapter()
         }
@@ -427,8 +439,8 @@ open class Fentry<Entity : Fentry<Entity>>
         }
     }
 
-    open fun getDefaultAdapter() : Array<Class<out SerializeAdapter<*>>> {
-        throw NotImplementedError("Not Implemented")
+    open fun getDefaultAdapter() : Array<out SerializeAdapter<*>> {
+        throw NotImplementedError("Not Implemented yet.")
     }
 
     override fun hashCode(): Int {
@@ -443,22 +455,21 @@ open class Fentry<Entity : Fentry<Entity>>
     companion object {
         fun registerDefaultAdapter(gsonBuilder : GsonBuilder) : GsonBuilder {
             for(adapter in getDefaultAdapter()) {
-                val jcs = adapter.constructors[0].newInstance() as SerializeAdapter<*>
-                gsonBuilder.registerTypeAdapter(jcs.getReference(), jcs)
+                gsonBuilder.registerTypeAdapter(adapter.getReference(), adapter)
             }
-            return gsonBuilder
+            return gsonBuilder.serializeNulls()
         }
 
-        fun registerDefaultAdapter(gsonBuilder : GsonBuilder, ref : Fentry<*>) : GsonBuilder {
+        fun registerDefaultAdapter(gsonBuilder : GsonBuilder, defaultReference : Class<out Fentry<*>>) : GsonBuilder {
             for(adapter in getDefaultAdapter()) {
-                val jcs = adapter.constructors[0].newInstance() as SerializeAdapter<*>
-                gsonBuilder.registerTypeAdapter(jcs.getReference(), jcs)
+                if(adapter is DefaultSerializer || adapter is MapTypeAdapter)
+                    gsonBuilder.registerTypeAdapter(defaultReference, adapter)
             }
-            return gsonBuilder
+            return gsonBuilder.serializeNulls()
         }
 
-        fun getDefaultAdapter() : Array<Class<out SerializeAdapter<*>>> {
-            return arrayOf()
+        fun getDefaultAdapter() : Array<out SerializeAdapter<*>> {
+            return arrayOf(DefaultSerializer.INSTANCE, MapTypeAdapter.INSTANCE)
         }
     }
 }
