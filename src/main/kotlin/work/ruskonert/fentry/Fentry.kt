@@ -87,7 +87,14 @@ object Util0 {
     }
 
     /**
+     * Configure the gson for fentry de/serialization.
+     * The default adapter of fentry will be detect your made the classes.
      *
+     * @param adapterColl The collection of adapter for de/serialization
+     * @param fentryTypeOf The class for default adapter of fentry type
+     * @param isPretty determines the json string is easy for understanding structures
+     * @return Returns gson that was configured the adapters & properties
+     * @see work.ruskonert.fentry.DefaultSerializer
      */
     fun configureFentryGson(adapterColl : Collection<SerializeAdapter<*>>?, fentryTypeOf : Class<out Fentry<*>>?, isPretty : Boolean = false) : Gson {
         val gsonBuilder = GsonBuilder()
@@ -162,6 +169,7 @@ object Util0 {
  */
 open class Fentry<Entity : Fentry<Entity>>
 {
+    //
     @InternalType
     private var reference : Type = (javaClass.genericSuperclass as ParameterizedType).actualTypeArguments[0]
     @Suppress("UNCHECKED_CAST")
@@ -170,7 +178,13 @@ open class Fentry<Entity : Fentry<Entity>>
     }
 
     /**
+     * Updates to the entity collection, which sames the type of this entity.
+     * This will be have the unique id, It cans distinguishing the object compare with others.
+     * If the task of hooked collection is enabled, the collection can detect it that about
+     * changed this entity.
      *
+     * @param containable
+     * @return
      */
     @Suppress("UNCHECKED_CAST")
     fun register(containable : Boolean = true) : Entity {
