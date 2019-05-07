@@ -31,4 +31,16 @@ abstract class SerializeAdapter<T>(private val reference : Class<*>) : JsonDeser
     fun getReference() : Class<*> {
         return this.reference
     }
+
+    override fun hashCode(): Int {
+        return reference.hashCode()
+    }
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+        other as SerializeAdapter<*>
+        if (reference != other.reference) return false
+        return true
+    }
 }

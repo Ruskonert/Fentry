@@ -399,6 +399,15 @@ open class Fentry<Entity : Fentry<Entity>>
         throw NotImplementedError("Not Implemented")
     }
 
+    override fun hashCode(): Int {
+        var result = reference.hashCode()
+        result = 31 * result + uid.hashCode()
+        result = 31 * result + (collection?.hashCode() ?: 0)
+        result = 31 * result + serializeAdapters.hashCode()
+        result = 31 * result + ignoreTransient.hashCode()
+        return result
+    }
+
     companion object {
         fun registerDefaultAdapter(gsonBuilder : GsonBuilder) : GsonBuilder {
             for(adapter in getDefaultAdapter()) {
