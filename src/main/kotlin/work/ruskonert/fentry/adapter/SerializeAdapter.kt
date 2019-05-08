@@ -26,8 +26,12 @@ import com.google.gson.JsonDeserializer
 import com.google.gson.JsonSerializer
 
 @Suppress("UNCHECKED_CAST")
-abstract class SerializeAdapter<T>(private val reference : Class<*>) : JsonDeserializer<T>, JsonSerializer<T>
+abstract class SerializeAdapter<T>(private var reference : Class<*>) : JsonDeserializer<T>, JsonSerializer<T>
 {
+    fun setReference(c : Class<*>) {
+        this.reference = c
+    }
+
     fun getReference() : Class<*> {
         return this.reference
     }

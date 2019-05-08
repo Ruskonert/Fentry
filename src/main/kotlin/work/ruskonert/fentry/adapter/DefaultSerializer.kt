@@ -29,9 +29,20 @@ import work.ruskonert.fentry.Fentry
 import work.ruskonert.fentry.FentryCollector
 import java.lang.reflect.Type
 
+/**
+ * DefaultSerializer is adapter for Fentry type.
+ * Maybe you want to need to use the method for gson directly, not using fentry serialize method.
+ * You can also use the GsonBuilder if registered this adapter type.
+ */
 class DefaultSerializer private constructor() : SerializeAdapter<Fentry<*>>(Fentry::class.java)
 {
     companion object {
+        fun createWithSelection(reference: Class<out Fentry<*>>) : DefaultSerializer {
+            val ds = DefaultSerializer()
+            ds.setReference(reference)
+            return ds
+        }
+
         val INSTANCE : DefaultSerializer = DefaultSerializer()
     }
 

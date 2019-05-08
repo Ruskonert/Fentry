@@ -302,12 +302,13 @@ abstract class FentryCollector<Entity : Fentry<Entity>>
         protected fun availableSerialize(jsonElement : JsonElement, ref : Class<*>) : Any?
         {
             return try {
-                val gson = Fentry.registerDefaultAdapter(GsonBuilder()).create()
+                val gson = Fentry::class.java.newInstance().configureSerializeBuilder().create()
                 gson.fromJson(jsonElement, ref)
             } catch(e : Exception) {
                 null
             }
         }
+
         @Suppress("UNCHECKED_CAST")
         suspend fun <E : Fentry<E>> setReference(entity: Fentry<E>, containable : Boolean = false)
         {

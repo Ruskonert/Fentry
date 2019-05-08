@@ -24,7 +24,6 @@ package work.ruskonert.fentry.adapter
 
 import com.google.gson.*
 import work.ruskonert.fentry.Fentry
-import work.ruskonert.fentry.sample.Student
 import java.lang.reflect.Type
 
 class MapTypeAdapter private constructor(): SerializeAdapter<Map<Any, Any?>>(Map::class.java)
@@ -35,10 +34,9 @@ class MapTypeAdapter private constructor(): SerializeAdapter<Map<Any, Any?>>(Map
 
     override fun serialize(value: Map<Any, Any?>?, fentryTypeOf: Type?, p2: JsonSerializationContext?): JsonElement {
         if(value == null) return JsonNull.INSTANCE
-        val gsonBuilder = Fentry.registerDefaultAdapter(GsonBuilder()).
-                registerTypeAdapter(fentryTypeOf, DefaultSerializer.INSTANCE)
+        val gsonBuilder = GsonBuilder()
         val entireJsonObject = JsonObject()
-        var gson : Gson
+        var gson : Gson = gsonBuilder.serializeNulls().create()
         for((k, v) in value) {
             val elementJsonObject = JsonObject()
             try {
@@ -53,14 +51,17 @@ class MapTypeAdapter private constructor(): SerializeAdapter<Map<Any, Any?>>(Map
                     keyOfJsonObject.addProperty("\$mapIndex?", k)
                     }
                     else -> {
-                        if(k is Fentry<*>) gsonBuilder.registerTypeAdapter(k::class.java, DefaultSerializer.INSTANCE)
+                        if(k is Fentry<*>) {
+                            @Suppress("UNCHECKED_CAST")
+                            for(sa in Fentry.getDefaultAdapter(k::class.java as Class<out Fentry<*>>)) {
+                                gsonBuilder.registerTypeAdapter(sa.getReference(), sa)
+                            }
+                        }
                         gson = gsonBuilder.create()
                         val classname = k::class.java.name
                         keyOfJsonObject.add("\$mapIndex?$classname", JsonParser().parse(gson.toJson(k)))
                     }
                 }
-                gsonBuilder.registerTypeAdapter(Student::class.java, DefaultSerializer.INSTANCE)
-                gson = gsonBuilder.create()
                 elementJsonObject.add("key", keyOfJsonObject)
                 val elementValueOfJsonObject = JsonObject()
                 when (v) {

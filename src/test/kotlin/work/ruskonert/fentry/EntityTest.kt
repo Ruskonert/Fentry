@@ -1,6 +1,5 @@
 package work.ruskonert.fentry
 
-import com.google.gson.GsonBuilder
 import org.junit.Before
 import org.junit.Test
 import kotlin.test.assertNotNull
@@ -30,7 +29,7 @@ class EntityTest
 
     @Test
     fun singletonTest() {
-        val gson = Fentry.registerDefaultAdapter(GsonBuilder(), People::class.java).create()
+        val gson = Fentry.getBuilderWithAdapter( People::class.java).create()
         val str = gson.toJson(peopleList)
         assertNotNull(str)
     }

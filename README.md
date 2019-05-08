@@ -1,6 +1,8 @@
 [![logo](https://img.icons8.com/ultraviolet/80/000000/acrobatics.png)](https://github.com/ruskonert/fentry)
 # Fentry (Flexible-serialization ENTRY)
 [![Build Status](https://travis-ci.org/Ruskonert/Fentry.svg?branch=master)](https://travis-ci.org/Ruskonert/Fentry)
+[![license](https://img.shields.io/badge/License-MIT-orange.svg)](https://github.com/Ruskonert/Fentry/blob/master/LICENSE.md)
+![license](https://img.shields.io/badge/Version-2.0.0-green.svg)
 <br />
 Fentry is flexible-serialization entry framework.<br />
 <b>The de/serialization for efficient community to other platform & More flexible management your project, That's all what I talking about.</b>
@@ -41,7 +43,31 @@ java.lang.UnsupportedOperationException: Attempted to serialize java.lang.Class:
 Because of not configuring & constructing the object adapter, So you will make the class for usuge properly.
 That's why I think It needs to make this.
 # The example for Usage
-It will be up to date.
+If you want to serialize automatically, It just inherits the class `Fentry<Child>`.
+For Example:
+```java
+import work.ruskonert.fentry.Fentry;
+
+public class MyEntity extends Fentry<MyEntity>
+{
+    private int number;
+    private String name;
+    private List<Integer> listOfScore;
+    // ... 
+}
+```
+And call the method `getSerializeString` or `getSerializeElements` for getting the elements:
+```java
+MyEntity entity = new MyEntity();
+
+// The string that was serialized the object
+String entitySerializeStr = entity.getSerializeString();
+
+// another
+JsonElement element = entity.getSerializeElements();
+```
+You can register to the internal engine, which detects the changed the value or class property, 
+Then you need to r
 # Licence
 <b>Fentry: The Flexible-Serialization Entry<br />
 Copyright (c) 2019 Ruskonert all rights reserved.</b>
