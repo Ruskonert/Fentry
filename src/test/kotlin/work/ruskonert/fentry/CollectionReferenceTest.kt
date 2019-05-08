@@ -2,7 +2,6 @@ package work.ruskonert.fentry
 
 import org.junit.Before
 import org.junit.Test
-
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 
@@ -76,7 +75,6 @@ class CollectionTest {
         testCollection.terminate()
     }
 
-
     @Test
     fun handlerTest()
     {
@@ -91,7 +89,6 @@ class CollectionTest {
         assertNotNull(entity)
     }
 
-    @Test
     fun collectionTest()
     {
         val collection = entity.getEntityCollector()
@@ -105,6 +102,5 @@ class CollectionTest {
 
         collection.terminate()
         assertEquals(collectionList.size, 0)
-
     }
 }

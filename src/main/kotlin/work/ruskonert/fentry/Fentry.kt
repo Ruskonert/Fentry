@@ -25,7 +25,6 @@ package work.ruskonert.fentry
 import com.google.gson.*
 import kotlinx.coroutines.runBlocking
 import work.ruskonert.fentry.adapter.DefaultSerializer
-import work.ruskonert.fentry.adapter.MapTypeAdapter
 import work.ruskonert.fentry.adapter.SerializeAdapter
 import work.ruskonert.fentry.sample.Student
 import java.lang.reflect.Field
