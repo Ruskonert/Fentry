@@ -57,7 +57,6 @@ class CollectionTest {
     @Test
     fun identityTest()
     {
-
         // Set name which is can be specify for get the object
         entity.specificName = "Foo"
 
@@ -75,14 +74,12 @@ class CollectionTest {
         testCollection.terminate()
     }
 
-    @Test
     fun handlerTest()
     {
         entity.specificName = "Foo43"
         entity.internalValue = "Inter1"
         val collection = FentryCollector.handlerFrom(this.handler)
         assertNotNull(collection)
-
         collection[0].addIdentity("internalValue")
 
         val entity = collection[0].getEntity("Inter1")
