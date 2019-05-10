@@ -100,11 +100,12 @@ MyEntity entity = new MyEntity();
 entity.register();
 
 // or you can create with register to collection at the same time.
-MyEntity entity = new MyEntity().regsiter();
+MyEntity entity = new MyEntity().register();
+
 ...
 // if the entity's unique id equals "eb83c6de-1909-4193-b05f-6fbce6b2c324"
-MyEntity refered = Fentry.getEnttiy("eb83c6de-1909-4193-b05f-6fbce6b2c324", MyEntity.getClass())
-... Then you want to go ..
+MyEntity refered = Fentry.getEntity("eb83c6de-1909-4193-b05f-6fbce6b2c324", MyEntity.getClass())
+// ... Then you want to go ..
 ```
 # Licence
 <b>Fentry: The Flexible-Serialization Entry<br />
