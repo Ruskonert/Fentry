@@ -507,6 +507,18 @@ open class Fentry<Entity : Fentry<Entity>> {
 
     companion object {
         /**
+         * Gets the entity from handled collection.
+         * When you import an Entity, use 'proviso' to get the best matching object.
+         * Returns null if nothing else is available.
+         * @param proviso
+         * @param body
+         * @return The entity which is selected by collector
+         */
+        fun <U : Fentry<U>> getEntity(proviso: Any?, body: Class<U>) : U? {
+            val collector = FentryCollector.getEntityCollection(body)
+            return collector?.getEntity(proviso)
+        }
+        /**
          * Every object that has a Fentry type has a unique ID.
          * This is a temporary value that is used when the object has
          * not yet been registered in collection.

@@ -2,7 +2,7 @@
 # Fentry (Flexible-serialization ENTRY)
 [![Build Status](https://travis-ci.org/Ruskonert/Fentry.svg?branch=master)](https://travis-ci.org/Ruskonert/Fentry)
 [![license](https://img.shields.io/badge/License-MIT-orange.svg)](https://github.com/Ruskonert/Fentry/blob/master/LICENSE.md)
-![license](https://img.shields.io/badge/Version-2.0.0-green.svg)
+![version](https://img.shields.io/badge/Version-2.0.0-green.svg)
 <br />
 Fentry is flexible-serialization entry framework.<br />
 <b>The de/serialization for efficient community to other platform & More flexible management your project, That's all what I talking about.</b>
@@ -66,8 +66,46 @@ String entitySerializeStr = entity.getSerializeString();
 // another
 JsonElement element = entity.getSerializeElements();
 ```
-You can register to the internal engine, which detects the changed the value or class property, 
-Then you need to r
+You can also register to the internal engine, which detects the changed value or class property, 
+you need to generate the collection which is related to entity type, referred the class. For example, The entity type equals `MyEntity`, Then that is the following:
+```Java
+import work.ruskonert.fentry.FentryCollector;
+public class MyCollection extends FentryCollector<MyEntity>
+{
+    public MyCollection() {
+        super();
+    }
+    // You want to the code ..
+}
+```
+Next you need to instance this class & connecting the handler. The handler is `CollectionHandler`,
+It just implements for using it.
+```java
+public class MyHandler implements CollectionHandler
+{
+    // You want to the code ..
+    
+}
+```
+The object uses when it needs checking or getting to the collection which was handled by some handler.
+Here is the example for getting the entity from collection:
+```java
+// Creating collection for service and register to memory.
+MyHandler handler = new MyHandler();
+MyCollection collection = new MyCollection().registerTask(handler);
+
+...
+// Create entity and register to it.
+MyEntity entity = new MyEntity();
+entity.register();
+
+// or you can create with register to collection at the same time.
+MyEntity entity = new MyEntity().regsiter();
+...
+// if the entity's unique id equals "eb83c6de-1909-4193-b05f-6fbce6b2c324"
+MyEntity refered = Fentry.getEnttiy("eb83c6de-1909-4193-b05f-6fbce6b2c324", MyEntity.getClass())
+... Then you want to go ..
+```
 # Licence
 <b>Fentry: The Flexible-Serialization Entry<br />
 Copyright (c) 2019 Ruskonert all rights reserved.</b>
