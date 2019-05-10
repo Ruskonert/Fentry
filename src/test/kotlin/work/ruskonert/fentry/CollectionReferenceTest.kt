@@ -74,6 +74,7 @@ class CollectionTest {
         testCollection.terminate()
     }
 
+    @Test
     fun handlerTest()
     {
         entity.specificName = "Foo43"
@@ -86,6 +87,7 @@ class CollectionTest {
         assertNotNull(entity)
     }
 
+    @Test
     fun collectionTest()
     {
         val collection = entity.getEntityCollector()

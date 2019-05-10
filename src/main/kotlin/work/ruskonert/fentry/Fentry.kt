@@ -263,7 +263,7 @@ open class Fentry<Entity : Fentry<Entity>> {
      * @see work.ruskonert.fentry.InternalType
      */
     @InternalType(IsExpected = true)
-    private var uid : String = "Please call the method #register if you want to identity it."
+    private var uid : String = UNREFERENCED_UNIQUE_ID
     fun getUniqueId() : String = this.uid
 
     /**
@@ -485,6 +485,7 @@ open class Fentry<Entity : Fentry<Entity>> {
     }
 
     companion object {
+        val UNREFERENCED_UNIQUE_ID = "Please call the method #register if you want to identity it."
         /**
          * Gets adapters as default for Fentry type.
          * It needs to register for that constructing the GsonBuilder or specifically

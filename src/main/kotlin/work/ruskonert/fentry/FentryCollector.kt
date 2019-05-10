@@ -25,12 +25,10 @@ package work.ruskonert.fentry
 import com.google.common.collect.ArrayListMultimap
 import com.google.gson.*
 import com.google.gson.stream.JsonReader
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.*
 import java.io.File
 import java.io.FileReader
+import java.lang.reflect.Field
 import java.lang.reflect.Modifier
 import java.lang.reflect.ParameterizedType
 import java.util.*
@@ -315,21 +313,29 @@ abstract class FentryCollector<Entity : Fentry<Entity>>
             for(k in getEntityCollections().values()) {
                 if(entity::class.java.isAssignableFrom(k.getPersistentBaseClass()))
                 {
-                    val job = GlobalScope.launch {
-                        // Hook the reference collection.
-                        var eField = entity::class.java.superclass.getDeclaredField("collection")
-                        eField.isAccessible = true
-                        eField.set(entity, k)
+                    lateinit var eField : Field
+                    runBlocking {
+                        launch {
+                            // Hook the reference collection.
+                            eField = entity::class.java.superclass.getDeclaredField("collection")
+                            eField.isAccessible = true
+                            eField.set(entity, k)
+                        }
 
-                        // Generate the unique signature if the entity have no id.
-                        eField = entity::class.java.superclass.getDeclaredField("uid")
-                        eField.isAccessible = true
-                        val uuid = eField.get(entity) as? String
-                        if(uuid == null || uuid == "") eField.set(entity, UUID.randomUUID().toString())
-                        val targetRef = k.entityCollection as MutableList<E>
-                        targetRef.add(entity as E)
+                        coroutineScope {
+                            launch {
+                                eField = entity::class.java.superclass.getDeclaredField("uid")
+                                eField.isAccessible = true
+                                // Generate the unique signature if the entity have no id.
+                                val uuid = eField.get(entity) as? String
+                                if(uuid == null || uuid == Fentry.UNREFERENCED_UNIQUE_ID)
+                                    eField.set(entity, UUID.randomUUID().toString())
+                                val targetRef = k.entityCollection as MutableList<E>
+                                targetRef.add(entity as E)
+                            }
+                        }
                     }
-                    job.join()
+                    return
                 }
             }
             println("Not exist EntityUnitCollection<${entity::class.java.simpleName}>, It needs to specific entity collection from registerTask class.")
