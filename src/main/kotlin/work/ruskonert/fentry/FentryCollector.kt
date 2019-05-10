@@ -68,9 +68,14 @@ abstract class FentryCollector<Entity : Fentry<Entity>>
     /**
      *
      */
-    fun registerTask(handler : CollectionHandler) : FentryCollector<Entity> {
-        handlerCollections.put(handler, this)
-        this.handler = handler
+    fun registerTask(handler : CollectionHandler? = null) : FentryCollector<Entity> {
+        if(handler != null) {
+            handlerCollections.put(handler, this)
+            this.handler = handler
+        }
+        else {
+
+        }
         return this
     }
 
@@ -84,7 +89,7 @@ abstract class FentryCollector<Entity : Fentry<Entity>>
      * Retrieves all entities that have the class type of the Collection.
      * The entities are those in which disk I/O synchronization is continuously performed by the create function.
      * @return The entities with continuous disk I/O synchronization
-     * @see work.ruskonert.fentry.Fentry.create
+     * @see work.ruskonert.fentry.Fentry.register
      */
     fun getEntities() : MutableList<Entity> = this.entityCollection
 
@@ -171,19 +176,8 @@ abstract class FentryCollector<Entity : Fentry<Entity>>
         }
 
         private fun <V, E> inlineNullCheck(value : V, entity : E, function : (V, E) -> Any?) : Boolean {
-            var result : Any? = null
-            runBlocking {
-                result = function(value, entity)
-            }
+            val result : Any? = function(value, entity)
             return result != null
-        }
-
-        private fun isUUID(s : String) : Boolean
-        {
-            return try {
-                UUID.fromString(s)
-                true
-            } catch(_ : IllegalArgumentException) { false }
         }
 
 
@@ -328,7 +322,7 @@ abstract class FentryCollector<Entity : Fentry<Entity>>
                                 eField.isAccessible = true
                                 // Generate the unique signature if the entity have no id.
                                 val uuid = eField.get(entity) as? String
-                                if(uuid == null || uuid == Fentry.UNREFERENCED_UNIQUE_ID)
+                                if(uuid == null || !Util0.isUUID(uuid) || uuid == Fentry.UNREFERENCED_UNIQUE_ID)
                                     eField.set(entity, UUID.randomUUID().toString())
                                 val targetRef = k.entityCollection as MutableList<E>
                                 targetRef.add(entity as E)

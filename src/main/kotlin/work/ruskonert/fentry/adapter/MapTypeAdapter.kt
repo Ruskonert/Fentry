@@ -25,6 +25,7 @@ package work.ruskonert.fentry.adapter
 import com.google.gson.*
 import work.ruskonert.fentry.Fentry
 import java.lang.reflect.Type
+import java.util.*
 
 class MapTypeAdapter private constructor(): SerializeAdapter<Map<Any, Any?>>(Map::class.java)
 {
@@ -36,24 +37,31 @@ class MapTypeAdapter private constructor(): SerializeAdapter<Map<Any, Any?>>(Map
         if(value == null) return JsonNull.INSTANCE
         val gsonBuilder = GsonBuilder()
         val entireJsonObject = JsonObject()
+        val adapter = JsonObject()
+        val adapterType = HashMap<String, String>()
+
         var gson : Gson = gsonBuilder.serializeNulls().create()
         for((k, v) in value) {
             val elementJsonObject = JsonObject()
             try {
                 val keyOfJsonObject = JsonObject()
                 when (k) {
-                      is Number  -> { keyOfJsonObject.addProperty("\$mapIndex?", k)
-                    } is String -> {
-                    keyOfJsonObject.addProperty("\$mapIndex?", k)
-                    } is Boolean-> {
-                    keyOfJsonObject.addProperty("\$mapIndex?", k)
-                    } is Char    -> {
-                    keyOfJsonObject.addProperty("\$mapIndex?", k)
+                    is Number -> {
+                        keyOfJsonObject.addProperty("\$mapIndex?", k)
+                    }
+                    is String -> {
+                        keyOfJsonObject.addProperty("\$mapIndex?", k)
+                    }
+                    is Boolean -> {
+                        keyOfJsonObject.addProperty("\$mapIndex?", k)
+                    }
+                    is Char -> {
+                        keyOfJsonObject.addProperty("\$mapIndex?", k)
                     }
                     else -> {
-                        if(k is Fentry<*>) {
+                        if (k is Fentry<*>) {
                             @Suppress("UNCHECKED_CAST")
-                            for(sa in Fentry.getDefaultAdapter(k::class.java as Class<out Fentry<*>>)) {
+                            for (sa in Fentry.getDefaultAdapter(k::class.java as Class<out Fentry<*>>)) {
                                 gsonBuilder.registerTypeAdapter(sa.getReference(), sa)
                             }
                         }
@@ -67,19 +75,49 @@ class MapTypeAdapter private constructor(): SerializeAdapter<Map<Any, Any?>>(Map
                 when (v) {
                     !is Number, Char, String, Boolean -> elementValueOfJsonObject.addProperty("typeOf", v!!::class.java.name)
                 }
+                if (v is Iterable<*>) {
+                    for (v2 in v) {
+                        if (v2 is Fentry<*>) {
+                            for(sa in v2.getSerializeAdapters()) {
+                                val saJson = JsonObject()
+                                val referenceString = sa.getReference().name
+                                val adapterClazz = sa::class.java.name
+
+                                saJson.addProperty("reference", referenceString)
+                                saJson.addProperty("targetOf", adapterClazz)
+
+                                if(! adapterType.containsKey(referenceString)) {
+                                    gsonBuilder.registerTypeAdapter(sa.getReference(), sa)
+                                    adapter.add(UUID.randomUUID().toString().replace("-", ""), saJson)
+                                    adapterType[referenceString] = adapterClazz
+                                    continue
+                                }
+                                else {
+                                    if(adapterClazz != adapterType[referenceString]) {
+                                        gsonBuilder.registerTypeAdapter(sa.getReference(), sa)
+                                        adapter.add(UUID.randomUUID().toString().replace("-", ""), saJson)
+                                        continue
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    gson = gsonBuilder.create()
+                }
                 elementValueOfJsonObject.add("value", JsonParser().parse(gson.toJson(v)))
                 elementJsonObject.add("element", elementValueOfJsonObject)
-            }
-            catch(e : Exception) {
+            } catch (e: Exception) {
+                e.printStackTrace()
                 continue
             }
-            entireJsonObject.add("object", elementJsonObject)
+            entireJsonObject.add("adapters", adapter)
+            entireJsonObject.add(UUID.randomUUID().toString(), elementJsonObject)
         }
         return entireJsonObject
     }
 
     override fun deserialize(p0: JsonElement?, p1: Type?, p2: JsonDeserializationContext?): Map<Any, Any?>
     {
-        return null!!
+        throw NotImplementedError("Not implemented")
     }
 }

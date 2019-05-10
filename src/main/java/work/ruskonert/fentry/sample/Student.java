@@ -14,7 +14,8 @@ import java.util.List;
 @SuppressWarnings("unused")
 public class Student extends Fentry<Student>
 {
-    private List<String> description = new ArrayList<String>();
+
+    private List<String> description = new ArrayList<>();
     public List<String> getDescription() {
         return description;
     }

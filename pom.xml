@@ -90,12 +90,14 @@
                             <goal>shade</goal>
                         </goals>
                         <configuration>
+                            <!--
                             <artifactSet>
                                 <includes>
                                     <include>org.jetbrains:*:*</include>
                                     <include>org.jetbrains.kotlin:kotlin-stdlib:jar:*</include>
                                 </includes>
                             </artifactSet>
+                            -->
                             <minimizeJar>true</minimizeJar>
                         </configuration>
                     </execution>

@@ -25,13 +25,15 @@ package work.ruskonert.fentry
 import com.google.gson.*
 import kotlinx.coroutines.runBlocking
 import work.ruskonert.fentry.adapter.DefaultSerializer
+import work.ruskonert.fentry.adapter.MapTypeAdapter
 import work.ruskonert.fentry.adapter.SerializeAdapter
-import work.ruskonert.fentry.sample.Student
 import java.lang.reflect.Field
 import java.lang.reflect.Modifier
 import java.lang.reflect.ParameterizedType
 import java.lang.reflect.Proxy.getInvocationHandler
 import java.lang.reflect.Type
+import java.util.*
+import kotlin.collections.ArrayList
 import kotlin.reflect.KClass
 import kotlin.reflect.full.primaryConstructor
 
@@ -41,6 +43,18 @@ import kotlin.reflect.full.primaryConstructor
  * satisfy certain conditions, which can only be used in the Fentry class.
  */
 object Util0 {
+
+    /**
+     * Checks the string can be converted to UUID.
+     * @return Returns the string maybe UUID.
+     */
+    fun isUUID(s : String) : Boolean
+    {
+        return try {
+            UUID.fromString(s)
+            true
+        } catch(_ : IllegalArgumentException) { false }
+    }
     /**
      * Determines the Field is not serializable value.
      * This is considered Internal Type when the annotation is referenced or it
@@ -122,14 +136,14 @@ object Util0 {
     /**
      * Sets the property on the JsonObject.
      * @param jsonObject will be configure the object and apply the value with serialize adapter
-     * @param key
-     * @param value
-     * @param configuredBuilder
-     * @param disableTransient
+     * @param key the key of configured elements
+     * @param value the configured element by 'configuredBuilder'
+     * @param configuredBuilder The gson builder that was registered adapter it is related to fentry type
+     * @param disableTransient determines the annotation of transient can be ignored when serializing the entity
      * @return Returns the configured JsonObject, which was applied it
      */
     fun setProperty(jsonObject : JsonObject, key : String, value : Any?, configuredBuilder : GsonBuilder, disableTransient : Boolean = false) : JsonObject {
-        var gson = configuredBuilder.create()
+        val gson = configuredBuilder.create()
         if(value == null) {
             jsonObject.add(key, JsonNull.INSTANCE)
             return jsonObject
@@ -154,8 +168,9 @@ object Util0 {
                     }
                     is Map<*,*> -> {
                         @Suppress("UNCHECKED_CAST")
-                        configuredBuilder.registerTypeAdapter(Student::class.java, DefaultSerializer.INSTANCE)
-                        jsonObject.add(key, gson.toJsonTree(value))
+                        val mapTypeOf = JsonObject()
+                        mapTypeOf.add("\$MapTypeOf?", MapTypeAdapter.INSTANCE.serialize(value as Map<Any, Any?>?, value::class.java, null))
+                        jsonObject.add(key, mapTypeOf)
                     }
                     else -> try {
                         val result = gson.toJson(value)
@@ -176,11 +191,11 @@ object Util0 {
     /**
      *
      */
-    fun applyField(field : Field, target : Any?) : Boolean
+    fun applyField(field : Field, target : Any?, victim : Any?) : Boolean
     {
         return try {
             field.isAccessible = true
-            field.set(this, field.get(target))
+            field.set(victim, field.get(target))
             true }
         catch(e : Exception) { false }
     }
@@ -275,7 +290,13 @@ open class Fentry<Entity : Fentry<Entity>> {
     fun convertNonDependent() { this.collection = null }
 
     /**
-     *
+     * Get entity from entity collection through the specific value.
+     * To get the value, in Collection, It needs to register the field name in
+     * identifier so you can find the Entity.
+     * @param referenceObject Any values that can be referred to as clues or information
+     *                        to get the Entity
+     * @return Returns the applicable entity
+     * @see work.ruskonert.fentry.FentryCollector.identifier
      */
     fun getEntity(referenceObject: Any?) : Entity? {
         val ref = this.collection ?: return null
@@ -287,7 +308,7 @@ open class Fentry<Entity : Fentry<Entity>> {
      */
     fun getSerializeString(isPretty : Boolean = true) : String {
         val element = this.getSerializeElements()
-        val gsonBuilder = GsonBuilder().serializeNulls()
+        val gsonBuilder = this.configureSerializeBuilder()
         if(isPretty) gsonBuilder.setPrettyPrinting()
         return gsonBuilder.create().toJson(element)
     }
@@ -463,7 +484,7 @@ open class Fentry<Entity : Fentry<Entity>> {
     fun applyFromBaseElement(victim : Fentry<Entity>) {
         if(victim::class.java == this::class.java) {
             for (k in victim.getSerializableEntityFields()) {
-                Util0.applyField(k, victim)
+                Util0.applyField(k, victim, this)
             }
         }
     }
@@ -485,7 +506,14 @@ open class Fentry<Entity : Fentry<Entity>> {
     }
 
     companion object {
-        val UNREFERENCED_UNIQUE_ID = "Please call the method #register if you want to identity it."
+        /**
+         * Every object that has a Fentry type has a unique ID.
+         * This is a temporary value that is used when the object has
+         * not yet been registered in collection.
+         */
+        @InternalType
+        const val UNREFERENCED_UNIQUE_ID = "Please call the method #register if you want to identity it."
+
         /**
          * Gets adapters as default for Fentry type.
          * It needs to register for that constructing the GsonBuilder or specifically
@@ -506,6 +534,9 @@ open class Fentry<Entity : Fentry<Entity>> {
             return clazzType.newInstance().serializeAdapters
         }
 
+        /**
+         * Gets default gsonBuilder from fentry type.
+         */
         fun getBuilderWithAdapter(classType: Class<out Fentry<*>>) : GsonBuilder {
             return classType.newInstance().configureSerializeBuilder()
         }

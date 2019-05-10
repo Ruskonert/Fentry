@@ -33,6 +33,6 @@ interface CollectionHandler
     }
 
     fun getHandlerName() : String {
-        return "GKingCollectHandler"
+        return "DefaultCollectHandler"
     }
 }

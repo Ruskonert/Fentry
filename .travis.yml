@@ -1,6 +1,6 @@
 language: java
 sudo: false
-script: "mvn test"
+script: "mvn install"
 jdk:
   - oraclejdk8
   - openjdk8
